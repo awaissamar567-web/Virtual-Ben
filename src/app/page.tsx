@@ -76,6 +76,11 @@ export default function Home() {
     let unsubscribe = () => {};
     const initAuth = async () => {
       try {
+        if (!auth) {
+          console.warn("Auth object is not initialized. Firebase config might be missing.");
+          setIsLoaded(true);
+          return;
+        }
         const { onAuthStateChanged } = await import("firebase/auth");
         unsubscribe = onAuthStateChanged(auth, (usr: any) => {
           setFirebaseUser(usr);
@@ -109,6 +114,9 @@ export default function Home() {
   const handleGoogleSignIn = async () => {
     try {
       setAuthError(null);
+      if (!auth) {
+        throw new Error("Firebase Authentication is not configured. Please add the Firebase credentials to Netlify's environment variables.");
+      }
       const { GoogleAuthProvider, signInWithPopup } = await import("firebase/auth");
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
@@ -120,6 +128,7 @@ export default function Home() {
 
   const handleSignOut = async () => {
     try {
+      if (!auth) return;
       const { signOut } = await import("firebase/auth");
       await signOut(auth);
     } catch (error) {
@@ -640,6 +649,22 @@ export default function Home() {
           <p className="login-subheading">
             Get premium, science-backed personal coaching Splits, Macros, and Daily Routine designs. Login to start.
           </p>
+          {!auth && (
+            <div className="auth-setup-warning" style={{
+              color: '#ffb300',
+              backgroundColor: 'rgba(255, 179, 0, 0.08)',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              marginBottom: '20px',
+              fontSize: '0.9rem',
+              border: '1px solid rgba(255, 179, 0, 0.2)',
+              textAlign: 'left',
+              lineHeight: '1.4',
+              width: '100%'
+            }}>
+              <strong>Setup Required:</strong> Firebase environment variables are not configured in Netlify yet. Please configure the <code>NEXT_PUBLIC_FIREBASE_*</code> keys in your Netlify dashboard to enable Google login.
+            </div>
+          )}
           {authError && (
             <div className="auth-error-message" style={{
               color: '#ff4d4d',
