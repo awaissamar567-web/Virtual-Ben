@@ -41,6 +41,31 @@ function parseArtifact(text: string) {
   };
 }
 
+// Propose Plan tag parser
+function parseProposePlan(text: string) {
+  if (!text) return null;
+  const proposePlanRegex = /<propose_plan\s+([^>]+)\s*\/>/i;
+  const match = proposePlanRegex.exec(text);
+  if (!match) return null;
+
+  const attributesStr = match[1];
+  const startIndex = match.index;
+  const endIndex = startIndex + match[0].length;
+
+  const typeMatch = /type=["']([^"']+)["']/i.exec(attributesStr);
+  const type = typeMatch ? typeMatch[1] : "workout";
+
+  const titleMatch = /title=["']([^"']+)["']/i.exec(attributesStr);
+  const title = titleMatch ? titleMatch[1] : "Proposed Plan";
+
+  return {
+    type,
+    title,
+    startIndex,
+    endIndex
+  };
+}
+
 const DEFAULT_API_KEY = "";
 const SYSTEM_PROMPT = `You are Virtual Ben, operating at the intersection of physical optimization and technological efficiency. You are a highly disciplined, results-oriented professional who applies the same rigorous standards to artificial intelligence as you do to bodybuilding and fitness. Your brand is built on "optimization" — focus on the fundamentals, ignore the hype, and use the right tools for the job.
 
@@ -56,10 +81,14 @@ PLAN FORMATTING & REAL-WORLD DETAILS:
 - Workout splits and meal plans MUST always be structured in clean Markdown Tables for a premium, highly readable layout.
 - When generating meal plans or splits, always specify concrete, real-world whole foods (e.g., pasture-raised eggs, grass-fed beef, sweet potato, jasmine rice, peanut butter, avocado, oats) as examples rather than abstract macros or numbers.
 
-ARTIFACT GENERATION RULE:
-Whenever the user asks for a workout plan, routine, training split, diet, meal plan, recipes, or a list of meal/exercise recommendations, you MUST ALWAYS generate the full detailed plan/routine/recipes/splits inside a custom XML tag:
-- Workout/training splits/routines: <artifact type="workout" title="Name of Workout Routine">...</artifact>
-- Meal plans/diets/recipes/meal ideas: <artifact type="meal" title="Name of Meal Plan">...</artifact>
+PLAN PROPOSAL & APPROVAL RULE:
+1. When a user asks for a workout plan, routine, training split, diet, meal plan, recipes, or a list of recommendations, you MUST NOT generate the full detailed plan inside an <artifact> tag immediately.
+2. Instead, you must first explain your general idea briefly (1-2 sentences) and ask the user if they would like you to generate a detailed plan.
+3. At the very end of your response, you MUST append a plan proposal tag: '<propose_plan type="workout|meal" title="Name of the Plan" />'.
+4. ONLY when the user explicitly approves (e.g., they click "Approve" or say "Yes, please generate the plan" or similar), you should output the full detailed plan inside the standard XML artifact tag:
+   - Workout splits/routines: <artifact type="workout" title="Name of Workout Routine">...</artifact>
+   - Meal plans/diets/recipes: <artifact type="meal" title="Name of Meal Plan">...</artifact>
+5. If the user declines (e.g. they say "No, let's just chat"), do NOT write the <artifact> tag. Talk back normally like a coach.
 
 In your conversational response bubble, ONLY mention or refer to the right-hand panel if you have actually generated an artifact in that turn. If you did not generate an artifact, do NOT tell the user to check the right-hand panel. Never repeat the full artifact details outside the tag. Keep it simple, facts, and solid.
 
@@ -585,43 +614,132 @@ export default function Home() {
     });
   };
 
-  // Render message bubble contents (hides XML block and displays an interactive button)
-  const renderMessageContent = (content: string): any => {
-    const parsed = parseArtifact(content);
-    if (!parsed) {
+  // Render message bubble contents (hides XML block and displays interactive buttons/features)
+  const renderMessageContent = (content: string, isLast = false): any => {
+    // 1. Check for artifact
+    const parsedArt = parseArtifact(content);
+    if (parsedArt) {
+      const beforeText = content.substring(0, parsedArt.startIndex);
+      const afterText = content.substring(parsedArt.endIndex);
+      const emoji = parsedArt.type === "workout" ? "🏋️‍♂️" : "🥗";
+
       return (
-        <div
-          className="markdown-body"
-          dangerouslySetInnerHTML={{ __html: marked.parse(content) }}
-        />
+        <>
+          {beforeText.trim() && (
+            <div
+              className="markdown-body"
+              dangerouslySetInnerHTML={{ __html: marked.parse(beforeText) }}
+            />
+          )}
+          <div className="my-2">
+            <button
+              className="message-action-btn"
+              onClick={() => {
+                setActiveArtifact({ type: parsedArt.type, title: parsedArt.title, content: parsedArt.content });
+                setIsArtifactVisible(true);
+              }}
+            >
+              {emoji} View Detailed {parsedArt.title}
+            </button>
+          </div>
+          {afterText.trim() && renderMessageContent(afterText, isLast)}
+        </>
       );
     }
 
-    const beforeText = content.substring(0, parsed.startIndex);
-    const afterText = content.substring(parsed.endIndex);
-    const emoji = parsed.type === "workout" ? "🏋️‍♂️" : "🥗";
+    // 2. Check for propose plan tag
+    const parsedPlan = parseProposePlan(content);
+    if (parsedPlan) {
+      const beforeText = content.substring(0, parsedPlan.startIndex);
+      const afterText = content.substring(parsedPlan.endIndex);
+      const emoji = parsedPlan.type === "workout" ? "🏋️‍♂️" : "🥗";
 
+      return (
+        <>
+          {beforeText.trim() && (
+            <div
+              className="markdown-body"
+              dangerouslySetInnerHTML={{ __html: marked.parse(beforeText) }}
+            />
+          )}
+          <div className="proposal-card" style={{
+            margin: '15px 0',
+            padding: '16px',
+            backgroundColor: 'var(--bg-main)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '12px',
+            boxShadow: 'var(--shadow-sm)'
+          }}>
+            <div className="proposal-header" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontWeight: '600',
+              fontSize: '0.95rem',
+              color: 'var(--text-primary)',
+              marginBottom: '12px'
+            }}>
+              <span>{emoji}</span>
+              <span>Propose: {parsedPlan.title}</span>
+            </div>
+            
+            {isLast ? (
+              <div className="proposal-actions" style={{
+                display: 'flex',
+                gap: '10px'
+              }}>
+                <button
+                  className="login-btn primary"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    flex: '1',
+                    minHeight: 'auto',
+                    margin: 0
+                  }}
+                  onClick={() => handleSendMessage(`Yes, please generate the ${parsedPlan.title} plan.`)}
+                >
+                  Generate Plan
+                </button>
+                <button
+                  className="login-btn secondary"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    backgroundColor: 'transparent',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-secondary)',
+                    flex: '1',
+                    minHeight: 'auto',
+                    margin: 0
+                  }}
+                  onClick={() => handleSendMessage(`No, let's just chat about it without making a formal plan.`)}
+                >
+                  Just Chat
+                </button>
+              </div>
+            ) : (
+              <div style={{
+                fontSize: '0.85rem',
+                color: 'var(--text-secondary)',
+                opacity: 0.6,
+                fontStyle: 'italic'
+              }}>
+                Proposal processed
+              </div>
+            )}
+          </div>
+          {afterText.trim() && renderMessageContent(afterText, isLast)}
+        </>
+      );
+    }
+
+    // 3. Plain markdown render
     return (
-      <>
-        {beforeText.trim() && (
-          <div
-            className="markdown-body"
-            dangerouslySetInnerHTML={{ __html: marked.parse(beforeText) }}
-          />
-        )}
-        <div className="my-2">
-          <button
-            className="message-action-btn"
-            onClick={() => {
-              setActiveArtifact({ type: parsed.type, title: parsed.title, content: parsed.content });
-              setIsArtifactVisible(true);
-            }}
-          >
-            {emoji} View Detailed {parsed.title}
-          </button>
-        </div>
-        {afterText.trim() && renderMessageContent(afterText)}
-      </>
+      <div
+        className="markdown-body"
+        dangerouslySetInnerHTML={{ __html: marked.parse(content) }}
+      />
     );
   };
 
@@ -950,7 +1068,7 @@ export default function Home() {
                       {msg.role === "user" ? "You" : "Virtual Ben Coach"}
                     </div>
                     <div className="message-bubble">
-                      {renderMessageContent(msg.content)}
+                      {renderMessageContent(msg.content, index === currentChat.messages.length - 1 && !isSending)}
                     </div>
                   </div>
                 ))}
@@ -960,7 +1078,7 @@ export default function Home() {
                   <div className="message-wrapper assistant">
                     <div className="message-meta">Virtual Ben Coach</div>
                     <div className="message-bubble">
-                      {renderMessageContent(streamingText)}
+                      {renderMessageContent(streamingText, false)}
                       <span className="streaming-indicator" />
                     </div>
                   </div>
