@@ -87,7 +87,6 @@ export default function Home() {
   const [promptInput, setPromptInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [streamingText, setStreamingText] = useState("");
-  const [wgerToken, setWgerToken] = useState("");
 
   // UI state
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -252,36 +251,6 @@ export default function Home() {
     
     if (isLoaded) {
       loadUserChats();
-    }
-  }, [user?.id, isLoaded]);
-
-  // Load wger token from localStorage and Firestore
-  useEffect(() => {
-    // 1. Fallback to localStorage
-    const savedToken = localStorage.getItem("vben_wger_token") || "";
-    setWgerToken(savedToken);
-
-    // 2. Load from Firestore if signed in
-    const loadWgerToken = async () => {
-      if (user?.id) {
-        try {
-          const docRef = doc(db, "users", user.id, "settings", "wger");
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data?.token) {
-              setWgerToken(data.token);
-              localStorage.setItem("vben_wger_token", data.token);
-            }
-          }
-        } catch (err) {
-          console.error("Error loading wger token from firestore:", err);
-        }
-      }
-    };
-
-    if (isLoaded) {
-      loadWgerToken();
     }
   }, [user?.id, isLoaded]);
 
@@ -516,7 +485,6 @@ export default function Home() {
         },
         body: JSON.stringify({
           messages: messagesPayload,
-          wgerToken: wgerToken,
         }),
       });
 
@@ -830,28 +798,6 @@ export default function Home() {
                         <input type="checkbox" checked={isLightMode} onChange={toggleTheme} />
                         <span className="slider"></span>
                       </label>
-                    </div>
-                    <div className="wger-api-key-container">
-                      <label className="wger-label">wger API Token</label>
-                      <input
-                        type="password"
-                        placeholder="Token code from wger.de..."
-                        value={wgerToken}
-                        onChange={async (e) => {
-                          const val = e.target.value;
-                          setWgerToken(val);
-                          localStorage.setItem("vben_wger_token", val);
-                          if (user?.id) {
-                            try {
-                              const docRef = doc(db, "users", user.id, "settings", "wger");
-                              await setDoc(docRef, { token: val }, { merge: true });
-                            } catch (err) {
-                              console.error("Error saving wger token to Firestore:", err);
-                            }
-                          }
-                        }}
-                        className="wger-input"
-                      />
                     </div>
                     <button 
                       className="signout-btn" 

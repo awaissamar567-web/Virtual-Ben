@@ -327,7 +327,8 @@ function getSystemReferenceInstructions() {
 
 export async function POST(req: Request) {
   try {
-    const { messages, wgerToken } = await req.json();
+    const { messages } = await req.json();
+    const wgerToken = process.env.WGER_API_KEY;
     const apiKey = process.env.GROQ_API_KEY;
 
     // Ground the AI model with the wger & USDA complete reference manual
