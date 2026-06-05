@@ -338,7 +338,7 @@ export async function POST(req: Request) {
     const baseURL = useGemini
       ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
       : "https://api.groq.com/openai/v1/chat/completions";
-    const modelName = useGemini ? "gemini-flash-latest" : "llama-3.3-70b-versatile";
+    const modelName = useGemini ? "gemini-flash-lite-latest" : "llama-3.3-70b-versatile";
 
     // Sanitize message history to remove any accidental or hallucinated function-call strings from previous turns
     const sanitizedMessages = messages.map((m: any) => {
