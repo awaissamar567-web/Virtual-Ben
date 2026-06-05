@@ -424,36 +424,7 @@ body {
   color: var(--text-secondary);
 }
 
-.wger-api-key-container {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border-top: 1px solid var(--border-color);
-  padding-top: 10px;
-}
 
-.wger-label {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.wger-input {
-  background-color: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 6px 10px;
-  color: var(--text-primary);
-  font-size: 0.8rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.wger-input:focus {
-  border-color: #2563eb;
-}
 
 .switch {
   position: relative;
@@ -1482,9 +1453,6 @@ input:checked + .slider:before {
   color: var(--text-muted);
 }
 
-#clerk-keyless {
-  display: none !important;
-}
 
 /* ==========================================================================
    Loading Screen & Transitions

@@ -69,6 +69,7 @@ CALORIE & MACRO QUERY RULE:
 export default function Home() {
   const [firebaseUser, setFirebaseUser] = useState<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Subscribe to Firebase Auth state changes
   useEffect(() => {
@@ -107,11 +108,13 @@ export default function Home() {
 
   const handleGoogleSignIn = async () => {
     try {
+      setAuthError(null);
       const { GoogleAuthProvider, signInWithPopup } = await import("firebase/auth");
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Firebase Sign-In Error:", error);
+      setAuthError(error?.message || String(error));
     }
   };
 
@@ -637,6 +640,23 @@ export default function Home() {
           <p className="login-subheading">
             Get premium, science-backed personal coaching Splits, Macros, and Daily Routine designs. Login to start.
           </p>
+          {authError && (
+            <div className="auth-error-message" style={{
+              color: '#ff4d4d',
+              backgroundColor: 'rgba(255, 77, 77, 0.08)',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              marginBottom: '20px',
+              fontSize: '0.9rem',
+              border: '1px solid rgba(255, 77, 77, 0.2)',
+              textAlign: 'left',
+              lineHeight: '1.4',
+              wordBreak: 'break-word',
+              width: '100%'
+            }}>
+              <strong>Sign-In Error:</strong> {authError}
+            </div>
+          )}
           <div className="login-button-group">
             <button onClick={handleGoogleSignIn} className="login-btn primary">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style={{ marginRight: '8px' }}>
@@ -855,10 +875,10 @@ export default function Home() {
                       <img src="/ben_coach.png" alt="VB Coach" className="avatar-img" />
                       <span className="online-dot" />
                     </div>
-                    <h2 className="welcome-heading">I'm Virtual Ben, your fitness & nutrition partner.</h2>
+                    <h2 className="welcome-heading">I&apos;m Virtual Ben, your fitness & nutrition partner.</h2>
                     <p className="welcome-tagline">
-                      Let's build specific, science-backed workout and meal plans tailored to your lifestyle.
-                      I don't believe in quick fixes—just sustainable, realistic growth.
+                      Let&apos;s build specific, science-backed workout and meal plans tailored to your lifestyle.
+                      I don&apos;t believe in quick fixes—just sustainable, realistic growth.
                     </p>
                     
                     <div className="quick-starts">
@@ -981,7 +1001,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="input-footer">
-                  Virtual Ben can make mistakes. Verify meal ideas & workout exercises to fit your body's safe limits.
+                  Virtual Ben can make mistakes. Verify meal ideas & workout exercises to fit your body&apos;s safe limits.
                 </div>
               </div>
             </section>

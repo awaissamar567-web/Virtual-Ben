@@ -329,7 +329,16 @@ export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
     const wgerToken = process.env.WGER_API_KEY;
-    const apiKey = process.env.GROQ_API_KEY;
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    const groqApiKey = process.env.GROQ_API_KEY;
+
+    // Use Gemini if its API key is configured, otherwise fallback to Groq
+    const useGemini = !!geminiApiKey;
+    const apiKey = useGemini ? geminiApiKey : groqApiKey;
+    const baseURL = useGemini
+      ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+      : "https://api.groq.com/openai/v1/chat/completions";
+    const modelName = useGemini ? "gemini-flash-latest" : "llama-3.3-70b-versatile";
 
     // Sanitize message history to remove any accidental or hallucinated function-call strings from previous turns
     const sanitizedMessages = messages.map((m: any) => {
@@ -364,7 +373,7 @@ export async function POST(req: Request) {
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Groq API key not configured on the server." },
+        { error: "API key (GEMINI_API_KEY or GROQ_API_KEY) not configured on the server." },
         { status: 500 }
       );
     }
@@ -548,14 +557,14 @@ export async function POST(req: Request) {
     ];
 
     // 1. Initial non-streaming call to check for tool requests
-    const initialResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const initialResponse = await fetch(baseURL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: modelName,
         messages: sanitizedMessages,
         temperature: 0.7,
         max_tokens: 4096,
@@ -567,11 +576,11 @@ export async function POST(req: Request) {
 
     if (!initialResponse.ok) {
       const errorText = await initialResponse.text();
-      console.error("GROQ API ERROR:", initialResponse.status, errorText);
+      console.error("API ERROR:", initialResponse.status, errorText);
       console.log("Messages count:", sanitizedMessages.length);
       console.log("Messages total payload size:", JSON.stringify(sanitizedMessages).length);
       return NextResponse.json(
-        { error: `Groq initial API error: ${errorText}` },
+        { error: `Initial API error: ${errorText}` },
         { status: initialResponse.status }
       );
     }
@@ -617,14 +626,14 @@ export async function POST(req: Request) {
       }
 
       // Fetch final completion from Groq streaming the result back to typewriter
-      const finalResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const finalResponse = await fetch(baseURL, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model: modelName,
           messages: updatedMessages,
           temperature: 0.7,
           max_tokens: 4096,
@@ -635,7 +644,7 @@ export async function POST(req: Request) {
       if (!finalResponse.ok) {
         const errorText = await finalResponse.text();
         return NextResponse.json(
-          { error: `Groq final API error: ${errorText}` },
+          { error: `Final API error: ${errorText}` },
           { status: finalResponse.status }
         );
       }
