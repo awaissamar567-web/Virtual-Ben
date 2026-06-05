@@ -312,10 +312,10 @@ async function logWgerWorkoutSession(
   }
 }
 
-// Helper to read the reference manual from the root of the project
+// Helper to read the optimized reference manual summary
 function getSystemReferenceInstructions() {
   try {
-    const filePath = path.join(process.cwd(), "SECTION 1_ WGER WORKOUT MANAGER API — COMPLETE REFERENCE.md");
+    const filePath = path.join(process.cwd(), "src/app/api/chat/instructions_summary.md");
     if (fs.existsSync(filePath)) {
       return fs.readFileSync(filePath, "utf-8");
     }
@@ -331,10 +331,35 @@ export async function POST(req: Request) {
     const wgerToken = process.env.WGER_API_KEY;
     const apiKey = process.env.GROQ_API_KEY;
 
+    // Sanitize message history to remove any accidental or hallucinated function-call strings from previous turns
+    const sanitizedMessages = messages.map((m: any) => {
+      if (m && typeof m.content === "string") {
+        let content = m.content;
+        if (content.includes("<function=") || content.includes("</function>")) {
+          // Replace or strip XML-style function calls to prevent Groq syntax/validation errors
+          content = content.replace(/<function=[\s\S]*?<\/function>/g, "");
+          content = content.replace(/<function=[\s\S]*/g, ""); // strip unclosed tags
+        }
+        return { ...m, content };
+      }
+      return m;
+    });
+
     // Ground the AI model with the wger & USDA complete reference manual
     const referenceManual = getSystemReferenceInstructions();
-    if (referenceManual && messages[0]?.role === "system") {
-      messages[0].content = messages[0].content + "\n\n### COMPLETE WGER & USDA REFERENCE MANUAL INSTRUCTIONS:\n" + referenceManual;
+    if (sanitizedMessages[0]?.role === "system") {
+      let content = sanitizedMessages[0].content || "";
+      if (referenceManual) {
+        content += "\n\n### COMPLETE WGER & USDA REFERENCE MANUAL INSTRUCTIONS:\n" + referenceManual;
+      }
+      // Add a strict instruction to prevent XML-based function calling hallucinations
+      content += "\n\n### CRITICAL SYSTEM INSTRUCTION FOR FUNCTION CALLS / TOOL USE:\n" +
+        "You have access to tools/functions (like search_usda_nutrition, queryWgerExercises, etc.).\n" +
+        "1. DO NOT write or output XML tags like '<function=...></function>' or '<function=...' in your response text under any circumstances.\n" +
+        "2. Do NOT try to write tool calls as plain text or code blocks in your response.\n" +
+        "3. You must ONLY call tools using the API's native JSON tool calling mechanism. The model runner will automatically parse it and call the function.\n" +
+        "4. If you output '<function=' or write XML function calls in your text, it will trigger an immediate system crash. Keep your text response clean, direct, and free of custom tags.";
+      sanitizedMessages[0].content = content;
     }
 
     if (!apiKey) {
@@ -531,7 +556,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
-        messages,
+        messages: sanitizedMessages,
         temperature: 0.7,
         max_tokens: 4096,
         tools,
@@ -542,6 +567,9 @@ export async function POST(req: Request) {
 
     if (!initialResponse.ok) {
       const errorText = await initialResponse.text();
+      console.error("GROQ API ERROR:", initialResponse.status, errorText);
+      console.log("Messages count:", sanitizedMessages.length);
+      console.log("Messages total payload size:", JSON.stringify(sanitizedMessages).length);
       return NextResponse.json(
         { error: `Groq initial API error: ${errorText}` },
         { status: initialResponse.status }
@@ -554,7 +582,7 @@ export async function POST(req: Request) {
     // 2. Resolve tool calls sequentially if the model requests them
     if (message?.tool_calls && message.tool_calls.length > 0) {
       const toolCalls = message.tool_calls;
-      const updatedMessages = [...messages, message];
+      const updatedMessages = [...sanitizedMessages, message];
 
       for (const toolCall of toolCalls) {
         let searchResult = "";
