@@ -11,9 +11,15 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase (safeguards against re-initialization during development hot-reloads)
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
-const auth = getAuth(app);
+let app: any = {};
+let db: any = {};
+let auth: any = {};
+
+if (typeof window !== "undefined") {
+  // Initialize Firebase (safeguards against re-initialization during development hot-reloads)
+  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  db = getFirestore(app);
+  auth = getAuth(app);
+}
 
 export { app, db, auth };
