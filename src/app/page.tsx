@@ -62,7 +62,10 @@ Whenever the user asks for a workout plan, routine, training split, diet, meal p
 - Workout/training splits/routines: <artifact type="workout" title="Name of Workout Routine">...</artifact>
 - Meal plans/diets/recipes/meal ideas: <artifact type="meal" title="Name of Meal Plan">...</artifact>
 
-In your conversational response bubble, ONLY mention or refer to the right-hand panel if you have actually generated an artifact in that turn. If you did not generate an artifact, do NOT tell the user to check the right-hand panel. Never repeat the full artifact details outside the tag. Keep it simple, facts, and solid.`;
+In your conversational response bubble, ONLY mention or refer to the right-hand panel if you have actually generated an artifact in that turn. If you did not generate an artifact, do NOT tell the user to check the right-hand panel. Never repeat the full artifact details outside the tag. Keep it simple, facts, and solid.
+
+CALORIE & MACRO QUERY RULE:
+- When a user asks for calories or macros of specific foods (e.g., "calories of 80g avocado"), be extremely direct, basic, and precise. Provide the final calorie and macro values immediately. Do NOT show the step-by-step mathematical calculations, formulas, or sequence. Keep it simple, clean, and practical for everyday users.`;
 
 export default function Home() {
   const { isLoaded, isSignedIn, user } = useUser();

@@ -508,7 +508,7 @@ stream.on('text', (text) => {
 
 1. **Persona Assignment:** "Act as a PhD Sports Scientist with a focus on hypertrophy."
 2. **Negative Prompting:** "Do not use words like 'vibrant', 'delve', or 'holistic'."
-3. **Chain of Thought (CoT):** "Show your math step-by-step before giving the final calorie count."
+3. **Concise Calculations:** "Provide direct, basic, and precise final values immediately. Do NOT show step-by-step mathematical calculations or conversion sequences for food queries."
 4. **Output Constraints:** "Your response must be under 300 words and include exactly 3 bullet points."
 5. **Few-Shot Prompting:** Provide 3 examples of a "Perfect Meal Plan" before asking for one.
 6. **Self-Critique:** "After generating the plan, review it for any generic advice and rewrite it to be more specific."
