@@ -100,6 +100,66 @@ export default function Home() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  // User onboarding/profile stats
+  const [userStats, setUserStats] = useState<any>(null);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [onboardingGender, setOnboardingGender] = useState("");
+  const [onboardingAge, setOnboardingAge] = useState("");
+  const [onboardingHeight, setOnboardingHeight] = useState("");
+  const [onboardingWeight, setOnboardingWeight] = useState("");
+  const [onboardingWeightUnit, setOnboardingWeightUnit] = useState("kg");
+
+  // Fetch user profile stats from Firestore upon authentication
+  useEffect(() => {
+    if (firebaseUser) {
+      const fetchUserStats = async () => {
+        try {
+          const docRef = doc(db, "users", firebaseUser.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setUserStats(data);
+            setIsOnboardingOpen(false);
+          } else {
+            setIsOnboardingOpen(true);
+          }
+        } catch (error) {
+          console.error("Error fetching user stats:", error);
+        }
+      };
+      fetchUserStats();
+    } else {
+      setUserStats(null);
+      setIsOnboardingOpen(false);
+    }
+  }, [firebaseUser]);
+
+  // Handle onboarding form submission
+  const handleOnboardingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firebaseUser) return;
+    try {
+      const stats = {
+        gender: onboardingGender,
+        age: parseInt(onboardingAge, 10),
+        height: parseInt(onboardingHeight, 10),
+        weight: parseFloat(onboardingWeight),
+        weightUnit: onboardingWeightUnit
+      };
+
+      const docRef = doc(db, "users", firebaseUser.uid);
+      await setDoc(docRef, {
+        ...stats,
+        updatedAt: new Date().toISOString()
+      });
+
+      setUserStats(stats);
+      setIsOnboardingOpen(false);
+    } catch (error) {
+      console.error("Error saving onboarding stats:", error);
+    }
+  };
+
   // Subscribe to Firebase Auth state changes
   useEffect(() => {
     let unsubscribe = () => {};
@@ -506,6 +566,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           messages: messagesPayload,
+          userStats: userStats,
         }),
       });
 
@@ -919,6 +980,44 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="profile-card-body">
+                    {userStats && (
+                      <div className="user-stats-display" style={{
+                        fontSize: '0.8rem',
+                        color: 'var(--text-secondary)',
+                        padding: '10px 0',
+                        borderBottom: '1px solid var(--border-color)',
+                        marginBottom: '10px',
+                        textAlign: 'left'
+                      }}>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>My Coach Profile:</div>
+                        <div>• Gender: {userStats.gender}</div>
+                        <div>• Age: {userStats.age} yrs</div>
+                        <div>• Height: {userStats.height} cm</div>
+                        <div>• Weight: {userStats.weight} {userStats.weightUnit}</div>
+                        <button 
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--accent-color)',
+                            fontSize: '0.8rem',
+                            padding: '4px 0 0 0',
+                            cursor: 'pointer',
+                            textDecoration: 'underline'
+                          }}
+                          onClick={() => {
+                            setOnboardingGender(userStats.gender || "");
+                            setOnboardingAge(String(userStats.age || ""));
+                            setOnboardingHeight(String(userStats.height || ""));
+                            setOnboardingWeight(String(userStats.weight || ""));
+                            setOnboardingWeightUnit(userStats.weightUnit || "kg");
+                            setIsOnboardingOpen(true);
+                            setIsProfileOpen(false);
+                          }}
+                        >
+                          Edit Profile Stats
+                        </button>
+                      </div>
+                    )}
                     <div className="theme-toggle-container">
                       <span>Light Theme</span>
                       <label className="switch">
@@ -1212,6 +1311,198 @@ export default function Home() {
         );
         return (bypassSignIn || isSignedIn) ? dashboardContent : null;
       })()}
+
+      {/* Onboarding / Edit Stats Modal Overlay */}
+      {isSignedIn && isOnboardingOpen && (
+        <div className="onboarding-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div className="onboarding-card" style={{
+            maxWidth: '480px',
+            width: '100%',
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '32px',
+            boxShadow: 'var(--shadow-xl)',
+            textAlign: 'left'
+          }}>
+            <h2 style={{
+              fontWeight: 700,
+              fontSize: '1.5rem',
+              color: 'var(--text-primary)',
+              marginBottom: '8px'
+            }}>Configure Your Coach Profile</h2>
+            <p style={{
+              fontSize: '0.9rem',
+              color: 'var(--text-secondary)',
+              marginBottom: '24px',
+              lineHeight: '1.4'
+            }}>
+              Virtual Ben personalizes your meal plans and training routines based on your stats. This information is saved securely and is fully isolated to your chat history.
+            </p>
+            
+            <form onSubmit={handleOnboardingSubmit} style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px'
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Gender</label>
+                <select 
+                  value={onboardingGender} 
+                  onChange={(e) => setOnboardingGender(e.target.value)}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-main)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.95rem'
+                  }}
+                  required
+                >
+                  <option value="">Select Gender...</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other / Prefer not to say</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Age</label>
+                  <input 
+                    type="number"
+                    min="1"
+                    max="120"
+                    value={onboardingAge}
+                    onChange={(e) => setOnboardingAge(e.target.value)}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-main)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.95rem'
+                    }}
+                    placeholder="e.g. 25"
+                    required
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Height (cm)</label>
+                  <input 
+                    type="number"
+                    min="50"
+                    max="300"
+                    value={onboardingHeight}
+                    onChange={(e) => setOnboardingHeight(e.target.value)}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-main)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.95rem'
+                    }}
+                    placeholder="e.g. 175"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Weight</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input 
+                    type="number"
+                    min="1"
+                    max="1000"
+                    value={onboardingWeight}
+                    onChange={(e) => setOnboardingWeight(e.target.value)}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-main)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.95rem',
+                      flex: '1'
+                    }}
+                    placeholder="e.g. 80"
+                    required
+                  />
+                  <select
+                    value={onboardingWeightUnit}
+                    onChange={(e: any) => setOnboardingWeightUnit(e.target.value)}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-main)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.95rem',
+                      width: '80px'
+                    }}
+                  >
+                    <option value="kg">kg</option>
+                    <option value="lbs">lbs</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                <button 
+                  type="submit" 
+                  className="login-btn primary"
+                  style={{
+                    padding: '12px 24px',
+                    fontSize: '1rem',
+                    fontWeight: '600',
+                    flex: '2',
+                    minHeight: 'auto',
+                    margin: 0
+                  }}
+                >
+                  Save Stats
+                </button>
+                {userStats && (
+                  <button 
+                    type="button" 
+                    className="login-btn secondary"
+                    style={{
+                      padding: '12px 24px',
+                      fontSize: '1rem',
+                      backgroundColor: 'transparent',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-secondary)',
+                      flex: '1',
+                      minHeight: 'auto',
+                      margin: 0
+                    }}
+                    onClick={() => setIsOnboardingOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

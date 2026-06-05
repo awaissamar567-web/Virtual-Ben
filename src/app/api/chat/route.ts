@@ -327,7 +327,7 @@ function getSystemReferenceInstructions() {
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { messages, userStats } = await req.json();
     const wgerToken = process.env.WGER_API_KEY;
     const geminiApiKey = process.env.GEMINI_API_KEY;
     const groqApiKey = process.env.GROQ_API_KEY;
@@ -354,13 +354,40 @@ export async function POST(req: Request) {
       return m;
     });
 
-    // Ground the AI model with the wger & USDA complete reference manual
+    // Determine if the user's latest query requires database/API tools
+    const lastUserMessage = sanitizedMessages.filter((m: any) => m.role === "user").pop()?.content || "";
+    const lowerMessage = String(lastUserMessage).toLowerCase();
+    
+    const fitnessKeywords = [
+      "workout", "exercise", "split", "routine", "train", "gym", "muscle", 
+      "bicep", "tricep", "chest", "back", "leg", "shoulder", "abs", "core",
+      "calorie", "macro", "protein", "carb", "fat", "nutrition", "food", 
+      "diet", "meal", "eat", "recipe", "chicken", "beef", "rice", "egg",
+      "wger", "usda", "splits", "meals", "diets", "macros", "calories"
+    ];
+    const needsTools = fitnessKeywords.some(keyword => lowerMessage.includes(keyword));
+
+    // Ground the AI model with active user stats and wger & USDA complete reference manual
     const referenceManual = getSystemReferenceInstructions();
     if (sanitizedMessages[0]?.role === "system") {
       let content = sanitizedMessages[0].content || "";
-      if (referenceManual) {
+      
+      // Inject secure, isolated user stats
+      if (userStats) {
+        content += `\n\n### ACTIVE USER SECURE STATS (Strict Session Isolation):\n` +
+          `- Age: ${userStats.age} years old\n` +
+          `- Gender: ${userStats.gender}\n` +
+          `- Height: ${userStats.height} cm\n` +
+          `- Weight: ${userStats.weight} ${userStats.weightUnit || 'kg'}\n\n` +
+          `CRITICAL: You must personalize all your calories, macros, splits, weights, and coaching advice based on these stats. ` +
+          `Never mix or confuse these stats with other users, and do not reference any other person's details in this isolated chat session.`;
+      }
+      
+      // Only inject the heavy 24KB manual if tools are needed
+      if (needsTools && referenceManual) {
         content += "\n\n### COMPLETE WGER & USDA REFERENCE MANUAL INSTRUCTIONS:\n" + referenceManual;
       }
+      
       // Add a strict instruction to prevent XML-based function calling hallucinations
       content += "\n\n### CRITICAL SYSTEM INSTRUCTION FOR FUNCTION CALLS / TOOL USE:\n" +
         "You have access to tools/functions (like search_usda_nutrition, queryWgerExercises, etc.).\n" +
@@ -378,30 +405,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Determine if the user's latest query requires database/API tools
-    const lastUserMessage = sanitizedMessages.filter((m: any) => m.role === "user").pop()?.content || "";
-    const lowerMessage = String(lastUserMessage).toLowerCase();
-    
-    const fitnessKeywords = [
-      "workout", "exercise", "split", "routine", "train", "gym", "muscle", 
-      "bicep", "tricep", "chest", "back", "leg", "shoulder", "abs", "core",
-      "calorie", "macro", "protein", "carb", "fat", "nutrition", "food", 
-      "diet", "meal", "eat", "recipe", "chicken", "beef", "rice", "egg",
-      "wger", "usda", "splits", "meals", "diets", "macros", "calories"
-    ];
-    
-    const needsTools = fitnessKeywords.some(keyword => lowerMessage.includes(keyword));
-
     if (!needsTools) {
       // Direct stream without tools or 24KB manual to reduce prefill/processing latency
-      const systemMessage = sanitizedMessages[0]?.role === "system" ? sanitizedMessages[0].content : "";
-      let cleanedSystem = systemMessage.split("\n\n### COMPLETE WGER & USDA")[0];
-      
-      const promptMessages = [...sanitizedMessages];
-      if (promptMessages[0]?.role === "system") {
-        promptMessages[0].content = cleanedSystem;
-      }
-
       const directResponse = await fetch(baseURL, {
         method: "POST",
         headers: {
@@ -410,7 +415,7 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           model: modelName,
-          messages: promptMessages,
+          messages: sanitizedMessages,
           temperature: 0.7,
           max_tokens: 4096,
           stream: true,
