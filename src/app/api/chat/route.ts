@@ -378,6 +378,62 @@ export async function POST(req: Request) {
       );
     }
 
+    // Determine if the user's latest query requires database/API tools
+    const lastUserMessage = sanitizedMessages.filter((m: any) => m.role === "user").pop()?.content || "";
+    const lowerMessage = String(lastUserMessage).toLowerCase();
+    
+    const fitnessKeywords = [
+      "workout", "exercise", "split", "routine", "train", "gym", "muscle", 
+      "bicep", "tricep", "chest", "back", "leg", "shoulder", "abs", "core",
+      "calorie", "macro", "protein", "carb", "fat", "nutrition", "food", 
+      "diet", "meal", "eat", "recipe", "chicken", "beef", "rice", "egg",
+      "wger", "usda", "splits", "meals", "diets", "macros", "calories"
+    ];
+    
+    const needsTools = fitnessKeywords.some(keyword => lowerMessage.includes(keyword));
+
+    if (!needsTools) {
+      // Direct stream without tools or 24KB manual to reduce prefill/processing latency
+      const systemMessage = sanitizedMessages[0]?.role === "system" ? sanitizedMessages[0].content : "";
+      let cleanedSystem = systemMessage.split("\n\n### COMPLETE WGER & USDA")[0];
+      
+      const promptMessages = [...sanitizedMessages];
+      if (promptMessages[0]?.role === "system") {
+        promptMessages[0].content = cleanedSystem;
+      }
+
+      const directResponse = await fetch(baseURL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages: promptMessages,
+          temperature: 0.7,
+          max_tokens: 4096,
+          stream: true,
+        }),
+      });
+
+      if (!directResponse.ok) {
+        const errorText = await directResponse.text();
+        return NextResponse.json(
+          { error: `API error: ${errorText}` },
+          { status: directResponse.status }
+        );
+      }
+
+      return new Response(directResponse.body, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        },
+      });
+    }
+
     // Define tools
     const tools = [
       {
