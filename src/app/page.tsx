@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useUser, useClerk, Show } from "@clerk/nextjs";
 import { marked } from "marked";
 import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy, getDoc } from "firebase/firestore";
-import { db } from "./firebase";
+import { db, auth } from "./firebase";
 
 // Robust artifact parser to handle single/double quotes, ordering, and incomplete close tags during streaming
 function parseArtifact(text: string) {
@@ -68,18 +67,61 @@ CALORIE & MACRO QUERY RULE:
 - When a user asks for calories or macros of specific foods (e.g., "calories of 80g avocado"), be extremely direct, basic, and precise. Provide the final calorie and macro values immediately. Do NOT show the step-by-step mathematical calculations, formulas, or sequence. Keep it simple, clean, and practical for everyday users.`;
 
 export default function Home() {
-  const { isLoaded, isSignedIn, user } = useUser();
-  const clerk = useClerk();
-  
-  // Set to false for secure, production Clerk authentication
+  const [firebaseUser, setFirebaseUser] = useState<any>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Subscribe to Firebase Auth state changes
+  useEffect(() => {
+    let unsubscribe = () => {};
+    const initAuth = async () => {
+      try {
+        const { onAuthStateChanged } = await import("firebase/auth");
+        unsubscribe = onAuthStateChanged(auth, (usr: any) => {
+          setFirebaseUser(usr);
+          setIsLoaded(true);
+        });
+      } catch (err) {
+        console.error("Firebase auth listener failed:", err);
+        setIsLoaded(true);
+      }
+    };
+    initAuth();
+    return () => unsubscribe();
+  }, []);
+
+  const isSignedIn = !!firebaseUser;
+
+  // Map Firebase User schema to match Clerk properties used in the UI
+  const user = firebaseUser ? {
+    id: firebaseUser.uid,
+    imageUrl: firebaseUser.photoURL || "/ben_coach.png",
+    fullName: firebaseUser.displayName || "Guest Account",
+    firstName: firebaseUser.displayName ? firebaseUser.displayName.split(" ")[0] : "My Profile",
+    primaryEmailAddress: {
+      emailAddress: firebaseUser.email || "guest@local.host"
+    }
+  } : null;
+
+  // Set to false for secure, production authentication
   const bypassSignIn = false;
 
-  const handleGoogleSignIn = () => {
-    clerk.client.signIn.authenticateWithRedirect({
-      strategy: "oauth_google",
-      redirectUrl: "/sso-callback",
-      redirectUrlComplete: "/",
-    });
+  const handleGoogleSignIn = async () => {
+    try {
+      const { GoogleAuthProvider, signInWithPopup } = await import("firebase/auth");
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Firebase Sign-In Error:", error);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      const { signOut } = await import("firebase/auth");
+      await signOut(auth);
+    } catch (error) {
+      console.error("Firebase Sign-Out Error:", error);
+    }
   };
 
   // Chat states
@@ -136,71 +178,6 @@ export default function Home() {
       }
     }
 
-    // Periodically search for the Clerk keyless mode prompt and hide/remove it
-    const removeClerkKeylessPrompt = () => {
-      // 1. Check direct children of body
-      document.body.childNodes.forEach((node) => {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          const el = node as HTMLElement;
-          if (
-            el.textContent &&
-            (el.textContent.includes("Configure your application") ||
-             el.textContent.includes("Claim your application") ||
-             el.textContent.includes("Temporary API keys"))
-          ) {
-            el.style.setProperty("display", "none", "important");
-            el.style.setProperty("visibility", "hidden", "important");
-            el.style.setProperty("opacity", "0", "important");
-            el.style.setProperty("pointer-events", "none", "important");
-          }
-        }
-      });
-
-      // 2. Also search all divs in the document
-      const allDivs = document.querySelectorAll("div");
-      allDivs.forEach((el) => {
-        if (
-          el.textContent &&
-          (el.textContent.includes("Configure your application") ||
-           el.textContent.includes("Claim your application") ||
-           el.textContent.includes("Temporary API keys"))
-        ) {
-          // Find the outermost fixed/absolute container, making sure not to hide our app
-          let current: HTMLElement | null = el;
-          while (current && current !== document.body) {
-            if (
-              current.classList.contains("app-container") ||
-              current.classList.contains("login-container") ||
-              current.id === "clerk-captcha"
-            ) {
-              // It is our own app content! Just hide the specific child text element instead of the container
-              el.style.setProperty("display", "none", "important");
-              break;
-            }
-            const style = window.getComputedStyle(current);
-            if (
-              style.position === "fixed" ||
-              style.position === "absolute" ||
-              current.parentElement === document.body
-            ) {
-              current.style.setProperty("display", "none", "important");
-              current.style.setProperty("visibility", "hidden", "important");
-              current.style.setProperty("opacity", "0", "important");
-              current.style.setProperty("pointer-events", "none", "important");
-              break;
-            }
-            current = current.parentElement;
-          }
-        }
-      });
-    };
-
-    removeClerkKeylessPrompt();
-    const keylessInterval = setInterval(removeClerkKeylessPrompt, 300);
-
-    return () => {
-      clearInterval(keylessInterval);
-    };
   }, []);
 
   // Helper to save a single chat session to Firestore
@@ -650,47 +627,31 @@ export default function Home() {
 
   return (
     <>
-      {/* Clerk Captcha: Always render in the DOM to prevent race conditions during initialization */}
-      {!bypassSignIn && (
-        <div 
-          id="clerk-captcha" 
-          style={{ 
-            display: isSignedIn ? "none" : "block",
-            position: "fixed",
-            bottom: "20px",
-            right: "20px",
-            zIndex: 9999
-          }} 
-        />
-      )}
-
       {/* Signed-out state: Beautiful Authentication Portal */}
-      {!bypassSignIn && (
-        <Show when="signed-out">
-          <div className="login-container">
-            <div className="login-logo">
-              <img src="/ben_coach.png" alt="Coach Logo" className="avatar-img" />
-            </div>
-            <h1 className="login-heading">Virtual Ben Coach</h1>
-            <p className="login-subheading">
-              Get premium, science-backed personal coaching Splits, Macros, and Daily Routine designs. Login to start.
-            </p>
-            <div className="login-button-group">
-              <button onClick={handleGoogleSignIn} className="login-btn primary">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style={{ marginRight: '8px' }}>
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                </svg>
-                Continue with Google
-              </button>
-            </div>
-            <div className="login-footer">
-              Virtual Ben uses advanced artificial intelligence models. Please verify workout forms and diets.
-            </div>
+      {!bypassSignIn && !isSignedIn && (
+        <div className="login-container">
+          <div className="login-logo">
+            <img src="/ben_coach.png" alt="Coach Logo" className="avatar-img" />
           </div>
-        </Show>
+          <h1 className="login-heading">Virtual Ben Coach</h1>
+          <p className="login-subheading">
+            Get premium, science-backed personal coaching Splits, Macros, and Daily Routine designs. Login to start.
+          </p>
+          <div className="login-button-group">
+            <button onClick={handleGoogleSignIn} className="login-btn primary">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style={{ marginRight: '8px' }}>
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              Continue with Google
+            </button>
+          </div>
+          <div className="login-footer">
+            Virtual Ben uses advanced artificial intelligence models. Please verify workout forms and diets.
+          </div>
+        </div>
       )}
 
       {/* Signed-in state / Local testing bypass: Main Interactive Application Dashboard */}
@@ -804,13 +765,7 @@ export default function Home() {
                     </div>
                     <button 
                       className="signout-btn" 
-                      onClick={() => {
-                        if (bypassSignIn) {
-                          alert("Sign Out is disabled in local bypass mode.");
-                        } else {
-                          clerk.signOut();
-                        }
-                      }}
+                      onClick={handleSignOut}
                     >
                       Sign Out
                     </button>
@@ -1092,7 +1047,7 @@ export default function Home() {
           </main>
           </div>
         );
-        return bypassSignIn ? dashboardContent : <Show when="signed-in">{dashboardContent}</Show>;
+        return (bypassSignIn || isSignedIn) ? dashboardContent : null;
       })()}
     </>
   );
