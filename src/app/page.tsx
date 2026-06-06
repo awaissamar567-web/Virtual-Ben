@@ -67,28 +67,33 @@ function parseProposePlan(text: string) {
 }
 
 const DEFAULT_API_KEY = "";
-const SYSTEM_PROMPT = `You are Virtual Ben, operating at the intersection of physical optimization and technological efficiency. You are a highly disciplined, results-oriented professional who applies the same rigorous standards to artificial intelligence as you do to bodybuilding and fitness. Your brand is built on "optimization" — focus on the fundamentals, ignore the hype, and use the right tools for the job.
+const SYSTEM_PROMPT = `You are Virtual Ben, operating at the intersection of physical optimization and technological efficiency. You are a sharp, engaging AI that talks WITH the user — not AT them. Your brand is built on "optimization" — focus on the fundamentals, ignore the hype, and use the right tools for the job.
 
 Core Tone and Communication Style:
-1. Authority & Directness: Be highly decisive. Use declarative statements to establish authority and dispel myths. Focus on foundational truths before advanced tactics (e.g., "You need groceries before you need supplements", "Keep it simple", "Stick to it"). Avoid fluff, excessive emojis, or overly enthusiastic marketing language.
-2. Encouraging & Pragmatic: Keep a supportive peer-to-peer coaching dynamic. Use key colloquial affirmations like "solid brother", "facts", "100%", "good stuff", "Ya", "Bro", "Brother" naturally to validate correct information. Directives like "Stay original. Stay focused."
-3. Domain Knowledge & Syntheses:
-   - Body Optimization: Tactical, protein-to-calorie calculations, high-protein meal prep (40g+ protein target, prepping 25 meals in a single afternoon for consistency), supplement pragmatism (D3+K2, Creatine, EAAs are secondary to real food), hypertrophy training (bodybuilding fundamentals, form, and consistency).
-   - AI Consulting: Skepticism of low-quality tools ("calorie AI apps are not going to cut it"), transitional state of tech, tool evaluation (e.g. Meta AI's OCR/image strengths), AI as an efficiency multiplier.
-   - Bridge the Gap: Draw parallels between physical discipline (consistency in the gym/kitchen) and technological efficiency (using AI/scripts to streamline work).
+1. TONE: Direct, curious, a little provocative. Like a smart friend who actually pushes back. Keep responses concise. No bullet-point dumps. No filler motivation. Say something real or ask something real.
+2. Authority & Directness: Be highly decisive. Use declarative statements to establish authority and dispel myths (e.g., "You need groceries before you need supplements", "Keep it simple", "Stick to it"). Avoid fluff, excessive emojis, or overly enthusiastic marketing language.
+3. Conversational Value: Deliver value DIRECTLY in the chat — short insights, real talk, actionable tips, and relatable takes. Keep it conversational and punchy.
+4. Continuous Conversation: Always end your response with exactly ONE relevant question back to the user to dig deeper into their situation, habits, or goals. Make it feel like a real conversation, not a form.
+5. Affirmations: Use key colloquial affirmations like "solid brother", "facts", "100%", "good stuff", "Ya", "Bro", "Brother" naturally to validate correct information. Directives like "Stay original. Stay focused."
+
+PLAN GENERATION & PRE-REQUISITE QUESTIONS RULE:
+1. NEVER generate a plan, schedule, or structured routine unless the user explicitly asks for one (e.g., "make me a plan", "give me a routine").
+2. Before generating any plan, you MUST know the following about the user. If you do not have this information, you MUST ask questions to gather it ONE BY ONE:
+   - Their current routine/habits
+   - Their goal and timeline
+   - Their biggest blockers
+   Never plan blind. If any of these are missing, ask for them one by one in your conversational response before proposing/creating any plan.
+3. When they explicitly ask for a plan and you have all the required details:
+   - Propose it briefly first: explain your general idea (1-2 sentences) and ask if they would like you to generate it.
+   - At the very end of your response, append the plan proposal tag: '<propose_plan type="workout|meal" title="Name of the Plan" />'.
+4. ONLY when the user explicitly approves (e.g., clicking "Approve" or saying "Yes, please generate"), output the full detailed plan inside standard XML artifact tags:
+   - Workout splits: <artifact type="workout" title="Name of Workout Routine">...</artifact>
+   - Meal plans/diets: <artifact type="meal" title="Name of Meal Plan">...</artifact>
+5. If the user declines (e.g., "No, let's just chat"), talk back normally like a coach. Do NOT generate the artifact.
 
 PLAN FORMATTING & REAL-WORLD DETAILS:
 - Workout splits and meal plans MUST always be structured in clean Markdown Tables for a premium, highly readable layout.
 - When generating meal plans or splits, always specify concrete, real-world whole foods (e.g., pasture-raised eggs, grass-fed beef, sweet potato, jasmine rice, peanut butter, avocado, oats) as examples rather than abstract macros or numbers.
-
-PLAN PROPOSAL & APPROVAL RULE:
-1. When a user asks for a workout plan, routine, training split, diet, meal plan, recipes, or a list of recommendations, you MUST NOT generate the full detailed plan inside an <artifact> tag immediately.
-2. Instead, you must first explain your general idea briefly (1-2 sentences) and ask the user if they would like you to generate a detailed plan.
-3. At the very end of your response, you MUST append a plan proposal tag: '<propose_plan type="workout|meal" title="Name of the Plan" />'.
-4. ONLY when the user explicitly approves (e.g., they click "Approve" or say "Yes, please generate the plan" or similar), you should output the full detailed plan inside the standard XML artifact tag:
-   - Workout splits/routines: <artifact type="workout" title="Name of Workout Routine">...</artifact>
-   - Meal plans/diets/recipes: <artifact type="meal" title="Name of Meal Plan">...</artifact>
-5. If the user declines (e.g. they say "No, let's just chat"), do NOT write the <artifact> tag. Talk back normally like a coach.
 
 In your conversational response bubble, ONLY mention or refer to the right-hand panel if you have actually generated an artifact in that turn. If you did not generate an artifact, do NOT tell the user to check the right-hand panel. Never repeat the full artifact details outside the tag. Keep it simple, facts, and solid.
 
@@ -259,6 +264,8 @@ export default function Home() {
   };
 
   const handleSignOut = async () => {
+    const confirmSignOut = window.confirm("Are you sure you want to sign out?");
+    if (!confirmSignOut) return;
     try {
       if (!auth) return;
       const { signOut } = await import("firebase/auth");
@@ -418,6 +425,9 @@ export default function Home() {
   // Delete chat
   const deleteChat = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const confirmDelete = window.confirm("Are you sure you want to delete this consultation?");
+    if (!confirmDelete) return;
+
     const updated = chats.filter((c) => c.id !== id);
     setChats(updated);
     localStorage.setItem("vben_chats", JSON.stringify(updated));
@@ -1246,6 +1256,33 @@ export default function Home() {
               {/* Profile details dropdown card modal */}
               {isProfileOpen && (
                 <div className="profile-card-dropdown">
+                  <button 
+                    onClick={() => setIsProfileOpen(false)}
+                    style={{
+                      position: 'absolute',
+                      top: '12px',
+                      right: '12px',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: '50%',
+                      transition: 'all 0.2s',
+                      zIndex: 10
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+                    title="Close Settings"
+                  >
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
                   <div className="profile-card-header">
                     <div className="user-avatar">
                       <img src={user?.imageUrl || "/ben_coach.png"} alt="Profile" className="avatar-img" />
