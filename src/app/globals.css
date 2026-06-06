@@ -89,7 +89,7 @@ body {
   font-family: var(--font-inter), var(--font-family-sans), system-ui, sans-serif;
   background-color: var(--bg-main);
   color: var(--text-primary);
-  height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
   display: flex;
@@ -101,7 +101,7 @@ body {
 /* Outer Window Frame styling */
 .app-container {
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   display: flex;
   background-color: var(--bg-main);
   position: relative;
@@ -115,7 +115,7 @@ body {
   }
   .app-container {
     width: calc(100vw - 24px);
-    height: calc(100vh - 24px);
+    height: calc(100dvh - 24px);
     border-radius: var(--radius-outer);
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-lg);
@@ -140,6 +140,8 @@ body {
               border-color var(--transition-speed) var(--transition-timing);
   z-index: 10;
   position: relative;
+  overflow: hidden;
+  max-height: 100dvh;
 }
 
 .sidebar.collapsed {
@@ -554,6 +556,8 @@ input:checked + .slider:before {
   background-color: var(--bg-main);
   position: relative;
   transition: background-color var(--transition-speed);
+  overflow: hidden;
+  min-height: 0;
 }
 
 .chat-header {
@@ -1573,6 +1577,149 @@ code, pre, code *, pre * {
   }
   100% {
     box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+/* ==========================================================================
+   Thinking Indicator & Dynamic Animations
+   ========================================================================== */
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.thinking-dot-animate {
+  width: 8px;
+  height: 8px;
+  background-color: var(--accent-color);
+  border-radius: 50%;
+  animation: pulse-dot-thinking 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse-dot-thinking {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.fade-in-question {
+  animation: fadeInQuestion 0.4s ease-out;
+}
+
+@keyframes fadeInQuestion {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Hide mobile profile card on desktop */
+.mobile-profile-card {
+  display: none;
+}
+
+/* ==========================================================================
+   Additional Responsive Mobile Styles
+   ========================================================================== */
+@media (max-width: 767px) {
+  .sidebar {
+    z-index: 100 !important;
+  }
+  
+  .welcome-container {
+    margin: 20px auto !important;
+    padding: 20px 10px !important;
+  }
+
+  .mobile-profile-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-card);
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+
+  .mobile-profile-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .mobile-profile-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--accent-color);
+    object-fit: cover;
+  }
+
+  .mobile-profile-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .mobile-profile-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-profile-email {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-profile-stats {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 10px;
+  }
+
+  .mobile-edit-stats-btn {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    font-size: 0.8rem;
+    cursor: pointer;
+    text-decoration: underline;
+    margin-left: auto;
+    padding: 0;
+  }
+
+  .mobile-profile-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--border-color);
+    padding-top: 10px;
+    font-size: 0.8rem;
+  }
+
+  .mobile-action-link {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px 0;
+  }
+
+  .mobile-action-link:hover {
+    color: var(--text-primary);
   }
 }
 

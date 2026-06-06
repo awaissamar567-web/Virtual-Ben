@@ -95,10 +95,56 @@ In your conversational response bubble, ONLY mention or refer to the right-hand 
 CALORIE & MACRO QUERY RULE:
 - When a user asks for calories or macros of specific foods (e.g., "calories of 80g avocado"), be extremely direct, basic, and precise. Provide the final calorie and macro values immediately. Do NOT show the step-by-step mathematical calculations, formulas, or sequence. Keep it simple, clean, and practical for everyday users.`;
 
+const SUGGESTED_QUESTIONS_POOL = [
+  {
+    emoji: "🏋️‍♂️",
+    label: "3-Day Beginner Workout",
+    prompt: "I want to start weight training. Can you create a basic 3-day full body split for a beginner?"
+  },
+  {
+    emoji: "🥗",
+    label: "High-Protein Meal Prep",
+    prompt: "Help me plan high-protein, budget-friendly meal ideas for fat loss. I have about 30 minutes to cook daily."
+  },
+  {
+    emoji: "⚡",
+    label: "Nutrition for Recovery",
+    prompt: "How do I structure my post-workout nutrition for better muscle recovery? What should I eat?"
+  },
+  {
+    emoji: "💪",
+    label: "Hypertrophy Guide",
+    prompt: "What are the core fundamentals of hypertrophy training? How many sets per muscle group per week should I do?"
+  },
+  {
+    emoji: "🍳",
+    label: "25-Meal Afternoon Prep",
+    prompt: "Can you design a structured cooking plan to prep 25 high-protein meals in a single afternoon?"
+  },
+  {
+    emoji: "🥛",
+    label: "Supplement Pragmatism",
+    prompt: "Which supplements are actually backed by science for bodybuilding and optimization, and which are hype?"
+  },
+  {
+    emoji: "🏃‍♂️",
+    label: "Cardio Integration",
+    prompt: "How should I structure my cardio training so it doesn't interfere with my hypertrophy and strength progress?"
+  },
+  {
+    emoji: "📅",
+    label: "Daily Habit Design",
+    prompt: "Can you help me design a daily morning and evening routine optimized for energy levels and sleep quality?"
+  }
+];
+
 export default function Home() {
   const [firebaseUser, setFirebaseUser] = useState<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  // Suggested questions rotation offset
+  const [questionOffset, setQuestionOffset] = useState(0);
 
   // User onboarding/profile stats
   const [userStats, setUserStats] = useState<any>(null);
@@ -109,30 +155,51 @@ export default function Home() {
   const [onboardingWeight, setOnboardingWeight] = useState("");
   const [onboardingWeightUnit, setOnboardingWeightUnit] = useState("kg");
 
-  // Fetch user profile stats from Firestore upon authentication
+  // Subscribe to Firebase Auth state changes and sync user stats from Firestore before declaring loaded
   useEffect(() => {
-    if (firebaseUser) {
-      const fetchUserStats = async () => {
-        try {
-          const docRef = doc(db, "users", firebaseUser.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            setUserStats(data);
-            setIsOnboardingOpen(false);
-          } else {
-            setIsOnboardingOpen(true);
-          }
-        } catch (error) {
-          console.error("Error fetching user stats:", error);
+    let unsubscribe = () => {};
+    const initAuth = async () => {
+      try {
+        if (!auth) {
+          console.warn("Auth object is not initialized. Firebase config might be missing.");
+          setIsLoaded(true);
+          return;
         }
-      };
-      fetchUserStats();
-    } else {
-      setUserStats(null);
-      setIsOnboardingOpen(false);
-    }
-  }, [firebaseUser]);
+        const { onAuthStateChanged } = await import("firebase/auth");
+        unsubscribe = onAuthStateChanged(auth, async (usr: any) => {
+          setIsLoaded(false);
+          setFirebaseUser(usr);
+          if (usr) {
+            try {
+              const docRef = doc(db, "users", usr.uid);
+              const docSnap = await getDoc(docRef);
+              if (docSnap.exists()) {
+                const data = docSnap.data();
+                setUserStats(data);
+                setIsOnboardingOpen(false);
+              } else {
+                setUserStats(null);
+                setIsOnboardingOpen(true);
+              }
+            } catch (error) {
+              console.error("Error fetching user stats on auth change:", error);
+              setUserStats(null);
+              setIsOnboardingOpen(true);
+            }
+          } else {
+            setUserStats(null);
+            setIsOnboardingOpen(false);
+          }
+          setIsLoaded(true);
+        });
+      } catch (err) {
+        console.error("Firebase auth listener failed:", err);
+        setIsLoaded(true);
+      }
+    };
+    initAuth();
+    return () => unsubscribe();
+  }, []);
 
   // Handle onboarding form submission
   const handleOnboardingSubmit = async (e: React.FormEvent) => {
@@ -159,30 +226,6 @@ export default function Home() {
       console.error("Error saving onboarding stats:", error);
     }
   };
-
-  // Subscribe to Firebase Auth state changes
-  useEffect(() => {
-    let unsubscribe = () => {};
-    const initAuth = async () => {
-      try {
-        if (!auth) {
-          console.warn("Auth object is not initialized. Firebase config might be missing.");
-          setIsLoaded(true);
-          return;
-        }
-        const { onAuthStateChanged } = await import("firebase/auth");
-        unsubscribe = onAuthStateChanged(auth, (usr: any) => {
-          setFirebaseUser(usr);
-          setIsLoaded(true);
-        });
-      } catch (err) {
-        console.error("Firebase auth listener failed:", err);
-        setIsLoaded(true);
-      }
-    };
-    initAuth();
-    return () => unsubscribe();
-  }, []);
 
   const isSignedIn = !!firebaseUser;
 
@@ -271,9 +314,6 @@ export default function Home() {
       try {
         const parsed = JSON.parse(savedChats);
         setChats(parsed);
-        if (parsed.length > 0) {
-          setCurrentChatId(parsed[0].id);
-        }
       } catch (e) {
         setChats([]);
       }
@@ -315,11 +355,7 @@ export default function Home() {
           loadedChats.push(doc.data());
         });
         setChats(loadedChats);
-        if (loadedChats.length > 0) {
-          setCurrentChatId(loadedChats[0].id);
-        } else {
-          setCurrentChatId(null);
-        }
+        setCurrentChatId(null);
       } catch (e) {
         console.error("Error loading chats from Firestore:", e);
         // Fallback to localStorage
@@ -335,12 +371,35 @@ export default function Home() {
     }
   }, [user?.id, isLoaded]);
 
+  // Suggested questions auto-rotation interval
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setQuestionOffset((prev) => (prev + 1) % SUGGESTED_QUESTIONS_POOL.length);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Close the artifact/plan panel when currentChatId changes (to show chat feed first)
+  useEffect(() => {
+    setIsArtifactVisible(false);
+  }, [currentChatId]);
+
+  // Get 3 questions starting from questionOffset
+  const getActiveQuestions = () => {
+    const questions = [];
+    for (let i = 0; i < 3; i++) {
+      const idx = (questionOffset + i) % SUGGESTED_QUESTIONS_POOL.length;
+      questions.push(SUGGESTED_QUESTIONS_POOL[idx]);
+    }
+    return questions;
+  };
+
   // Create a new chat session
   const startNewChat = async () => {
     const id = Date.now().toString();
     const newChatSession = {
       id: id,
-      title: "New Coaching Session",
+      title: "New Consultation",
       messages: [],
       created: new Date().toISOString(),
     };
@@ -804,6 +863,187 @@ export default function Home() {
     );
   };
 
+  const showNewUserOnboarding = isSignedIn && !userStats;
+  const showEditStatsModal = isSignedIn && userStats && isOnboardingOpen;
+
+  const renderOnboardingForm = (isNewUser: boolean) => {
+    return (
+      <div className="onboarding-card" style={{
+        maxWidth: '480px',
+        width: '100%',
+        backgroundColor: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '16px',
+        padding: '32px',
+        boxShadow: 'var(--shadow-xl)',
+        textAlign: 'left'
+      }}>
+        <h2 style={{
+          fontWeight: 700,
+          fontSize: '1.5rem',
+          color: 'var(--text-primary)',
+          marginBottom: '8px'
+        }}>Configure Your Coach Profile</h2>
+        <p style={{
+          fontSize: '0.9rem',
+          color: 'var(--text-secondary)',
+          marginBottom: '24px',
+          lineHeight: '1.4'
+        }}>
+          Virtual Ben personalizes your meal plans and training routines based on your stats. This information is saved securely and is fully isolated to your chat history.
+        </p>
+        
+        <form onSubmit={handleOnboardingSubmit} style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '18px'
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Gender</label>
+            <select 
+              value={onboardingGender} 
+              onChange={(e) => setOnboardingGender(e.target.value)}
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: '1px solid var(--border-color)',
+                backgroundColor: 'var(--bg-main)',
+                color: 'var(--text-primary)',
+                fontSize: '0.95rem'
+              }}
+              required
+            >
+              <option value="">Select Gender...</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other / Prefer not to say</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1' }}>
+              <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Age</label>
+              <input 
+                type="number"
+                min="1"
+                max="120"
+                value={onboardingAge}
+                onChange={(e) => setOnboardingAge(e.target.value)}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-main)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.95rem'
+                }}
+                placeholder="e.g. 25"
+                required
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1' }}>
+              <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Height (cm)</label>
+              <input 
+                type="number"
+                min="50"
+                max="300"
+                value={onboardingHeight}
+                onChange={(e) => setOnboardingHeight(e.target.value)}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-main)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.95rem'
+                }}
+                placeholder="e.g. 175"
+                required
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Weight</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input 
+                type="number"
+                min="1"
+                max="1000"
+                value={onboardingWeight}
+                onChange={(e) => setOnboardingWeight(e.target.value)}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-main)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.95rem',
+                  flex: '1'
+                }}
+                placeholder="e.g. 80"
+                required
+              />
+              <select
+                value={onboardingWeightUnit}
+                onChange={(e: any) => setOnboardingWeightUnit(e.target.value)}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-main)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.95rem',
+                  width: '80px'
+                }}
+              >
+                <option value="kg">kg</option>
+                <option value="lbs">lbs</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+            <button 
+              type="submit" 
+              className="login-btn primary"
+              style={{
+                padding: '12px 24px',
+                fontSize: '1rem',
+                fontWeight: '600',
+                flex: '2',
+                minHeight: 'auto',
+                margin: 0
+              }}
+            >
+              Save Stats
+            </button>
+            {!isNewUser && (
+              <button 
+                type="button" 
+                className="login-btn secondary"
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '1rem',
+                  backgroundColor: 'transparent',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-secondary)',
+                  flex: '1',
+                  minHeight: 'auto',
+                  margin: 0
+                }}
+                onClick={() => setIsOnboardingOpen(false)}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
+    );
+  };
+
   // Show loading spinner while Clerk is loading (only if not bypassing login wall)
   if (!bypassSignIn && !isLoaded) {
     return (
@@ -923,18 +1163,56 @@ export default function Home() {
                   </svg>
                 </button>
               </div>
-              <button className="new-chat-btn" onClick={startNewChat} title="New Chat">
+              <button className="new-chat-btn" onClick={startNewChat} title="New Consultation">
                 <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
-                <span>New Chat</span>
+                <span>New Consultation</span>
               </button>
             </div>
 
             <div className="sidebar-scroll-area">
+              {/* Mobile Profile Sidebar Card */}
+              {user && (
+                <div className="mobile-profile-card">
+                  <div className="mobile-profile-header">
+                    <img src={user.imageUrl} alt="Avatar" className="mobile-profile-avatar" />
+                    <div className="mobile-profile-info">
+                      <div className="mobile-profile-name">{user.fullName}</div>
+                      <div className="mobile-profile-email">{user.primaryEmailAddress.emailAddress}</div>
+                    </div>
+                  </div>
+                  {userStats ? (
+                    <div className="mobile-profile-stats">
+                      <span>Gender: {userStats.gender}</span> • <span>Age: {userStats.age}y</span> • <span>Height: {userStats.height}cm</span> • <span>Weight: {userStats.weight}{userStats.weightUnit}</span>
+                      <button className="mobile-edit-stats-btn" onClick={() => {
+                        setOnboardingGender(userStats.gender || "");
+                        setOnboardingAge(String(userStats.age || ""));
+                        setOnboardingHeight(String(userStats.height || ""));
+                        setOnboardingWeight(String(userStats.weight || ""));
+                        setOnboardingWeightUnit(userStats.weightUnit || "kg");
+                        setIsOnboardingOpen(true);
+                      }}>Edit Stats</button>
+                    </div>
+                  ) : (
+                    <div className="mobile-profile-stats">
+                      <button className="mobile-edit-stats-btn" onClick={() => setIsOnboardingOpen(true)}>Set Stats</button>
+                    </div>
+                  )}
+                  <div className="mobile-profile-actions">
+                    <button className="mobile-action-link" onClick={toggleTheme}>
+                      {isLightMode ? "☀️ Light" : "🌙 Dark"} Mode
+                    </button>
+                    <button className="mobile-action-link" onClick={handleSignOut}>
+                      🚪 Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="sidebar-section">
-                <div className="sidebar-section-title">Chat History</div>
+                <div className="sidebar-section-title">Consulting History</div>
                 <ul className="chat-history-list">
                   {chats.map((c) => (
                     <li
@@ -1124,39 +1402,16 @@ export default function Home() {
                     </p>
                     
                     <div className="quick-starts">
-                      <button
-                        className="quick-start-card"
-                        onClick={() =>
-                          handleSendMessage(
-                            "I want to start weight training. Can you create a basic 3-day full body split for a beginner?"
-                          )
-                        }
-                      >
-                        <span className="card-emoji">🏋️‍♂️</span>
-                        <span className="card-text">3-Day Beginner Workout</span>
-                      </button>
-                      <button
-                        className="quick-start-card"
-                        onClick={() =>
-                          handleSendMessage(
-                            "Help me plan high-protein, budget-friendly meal ideas for fat loss. I have about 30 minutes to cook daily."
-                          )
-                        }
-                      >
-                        <span className="card-emoji">🥗</span>
-                        <span className="card-text">High-Protein Meal Prep</span>
-                      </button>
-                      <button
-                        className="quick-start-card"
-                        onClick={() =>
-                          handleSendMessage(
-                            "How do I structure my post-workout nutrition for better muscle recovery? What should I eat?"
-                          )
-                        }
-                      >
-                        <span className="card-emoji">⚡</span>
-                        <span className="card-text">Nutrition for Recovery</span>
-                      </button>
+                      {getActiveQuestions().map((q) => (
+                        <button
+                          key={q.label}
+                          className="quick-start-card fade-in-question"
+                          onClick={() => handleSendMessage(q.prompt)}
+                        >
+                          <span className="card-emoji">{q.emoji}</span>
+                          <span className="card-text">{q.label}</span>
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1173,12 +1428,21 @@ export default function Home() {
                 ))}
 
                 {/* Live stream bubble during API generation */}
-                {isSending && streamingText && (
+                {isSending && (
                   <div className="message-wrapper assistant">
                     <div className="message-meta">Virtual Ben Coach</div>
                     <div className="message-bubble">
-                      {renderMessageContent(streamingText, false)}
-                      <span className="streaming-indicator" />
+                      {streamingText ? (
+                        <>
+                          {renderMessageContent(streamingText, false)}
+                          <span className="streaming-indicator" />
+                        </>
+                      ) : (
+                        <div className="thinking-indicator">
+                          <span className="thinking-dot-animate"></span>
+                          <span>Ben is thinking...</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1309,11 +1573,30 @@ export default function Home() {
           </main>
           </div>
         );
-        return (bypassSignIn || isSignedIn) ? dashboardContent : null;
+        return (bypassSignIn || (isSignedIn && !showNewUserOnboarding)) ? dashboardContent : null;
       })()}
 
-      {/* Onboarding / Edit Stats Modal Overlay */}
-      {isSignedIn && isOnboardingOpen && (
+      {/* Fullscreen Onboarding for New Users */}
+      {isSignedIn && showNewUserOnboarding && (
+        <div className="onboarding-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'var(--bg-main)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }}>
+          {renderOnboardingForm(true)}
+        </div>
+      )}
+
+      {/* Edit Stats Modal Overlay */}
+      {showEditStatsModal && (
         <div className="onboarding-overlay" style={{
           position: 'fixed',
           top: 0,
@@ -1328,179 +1611,7 @@ export default function Home() {
           justifyContent: 'center',
           padding: '20px'
         }}>
-          <div className="onboarding-card" style={{
-            maxWidth: '480px',
-            width: '100%',
-            backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '16px',
-            padding: '32px',
-            boxShadow: 'var(--shadow-xl)',
-            textAlign: 'left'
-          }}>
-            <h2 style={{
-              fontWeight: 700,
-              fontSize: '1.5rem',
-              color: 'var(--text-primary)',
-              marginBottom: '8px'
-            }}>Configure Your Coach Profile</h2>
-            <p style={{
-              fontSize: '0.9rem',
-              color: 'var(--text-secondary)',
-              marginBottom: '24px',
-              lineHeight: '1.4'
-            }}>
-              Virtual Ben personalizes your meal plans and training routines based on your stats. This information is saved securely and is fully isolated to your chat history.
-            </p>
-            
-            <form onSubmit={handleOnboardingSubmit} style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '18px'
-            }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Gender</label>
-                <select 
-                  value={onboardingGender} 
-                  onChange={(e) => setOnboardingGender(e.target.value)}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border-color)',
-                    backgroundColor: 'var(--bg-main)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.95rem'
-                  }}
-                  required
-                >
-                  <option value="">Select Gender...</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other / Prefer not to say</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', gap: '16px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Age</label>
-                  <input 
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={onboardingAge}
-                    onChange={(e) => setOnboardingAge(e.target.value)}
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border-color)',
-                      backgroundColor: 'var(--bg-main)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.95rem'
-                    }}
-                    placeholder="e.g. 25"
-                    required
-                  />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Height (cm)</label>
-                  <input 
-                    type="number"
-                    min="50"
-                    max="300"
-                    value={onboardingHeight}
-                    onChange={(e) => setOnboardingHeight(e.target.value)}
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border-color)',
-                      backgroundColor: 'var(--bg-main)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.95rem'
-                    }}
-                    placeholder="e.g. 175"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Weight</label>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input 
-                    type="number"
-                    min="1"
-                    max="1000"
-                    value={onboardingWeight}
-                    onChange={(e) => setOnboardingWeight(e.target.value)}
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border-color)',
-                      backgroundColor: 'var(--bg-main)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.95rem',
-                      flex: '1'
-                    }}
-                    placeholder="e.g. 80"
-                    required
-                  />
-                  <select
-                    value={onboardingWeightUnit}
-                    onChange={(e: any) => setOnboardingWeightUnit(e.target.value)}
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border-color)',
-                      backgroundColor: 'var(--bg-main)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.95rem',
-                      width: '80px'
-                    }}
-                  >
-                    <option value="kg">kg</option>
-                    <option value="lbs">lbs</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
-                <button 
-                  type="submit" 
-                  className="login-btn primary"
-                  style={{
-                    padding: '12px 24px',
-                    fontSize: '1rem',
-                    fontWeight: '600',
-                    flex: '2',
-                    minHeight: 'auto',
-                    margin: 0
-                  }}
-                >
-                  Save Stats
-                </button>
-                {userStats && (
-                  <button 
-                    type="button" 
-                    className="login-btn secondary"
-                    style={{
-                      padding: '12px 24px',
-                      fontSize: '1rem',
-                      backgroundColor: 'transparent',
-                      border: '1px solid var(--border-color)',
-                      color: 'var(--text-secondary)',
-                      flex: '1',
-                      minHeight: 'auto',
-                      margin: 0
-                    }}
-                    onClick={() => setIsOnboardingOpen(false)}
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
-          </div>
+          {renderOnboardingForm(false)}
         </div>
       )}
     </>
